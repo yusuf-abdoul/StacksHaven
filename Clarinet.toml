@@ -1,0 +1,43 @@
+[project]
+name = 'harveston'
+description = ''
+authors = []
+telemetry = true
+cache_dir = './.cache'
+requirements = []
+[contracts.harvester]
+path = 'contracts/harvester.clar'
+clarity_version = 3
+epoch = 'latest'
+
+[contracts.strategy-a]
+path = 'contracts/strategy-a.clar'
+clarity_version = 3
+epoch = 'latest'
+
+[contracts.strategy-b]
+path = 'contracts/strategy-b.clar'
+clarity_version = 3
+epoch = 'latest'
+
+[contracts.strategy-c]
+path = 'contracts/strategy-c.clar'
+clarity_version = 3
+epoch = 'latest'
+
+[contracts.vault]
+path = 'contracts/vault.clar'
+clarity_version = 3
+epoch = 'latest'
+[repl.analysis]
+passes = ['check_checker']
+
+[repl.analysis.check_checker]
+strict = false
+trusted_sender = false
+trusted_caller = false
+callee_filter = false
+
+[repl.remote_data]
+enabled = false
+api_url = 'https://api.hiro.so'

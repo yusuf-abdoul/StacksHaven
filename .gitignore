@@ -1,0 +1,68 @@
+# ─────────────────────────────
+# Clarinet & Blockchain Settings
+# ─────────────────────────────
+**/settings/Mainnet.toml
+**/settings/Testnet.toml
+.cache/**
+history.txt
+
+# ─────────────────────────────
+# Logs & Reports
+# ─────────────────────────────
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+coverage/
+*.info
+costs-reports.json
+
+# ─────────────────────────────
+# Dependencies
+# ─────────────────────────────
+node_modules/
+frontend/node_modules/
+
+# ─────────────────────────────
+# Environment Files
+# ─────────────────────────────
+.env
+.env.*
+frontend/.env
+frontend/.env.*
+
+# ─────────────────────────────
+# Next.js & Frontend Builds
+# ─────────────────────────────
+.next/
+out/
+build/
+frontend/.next/
+frontend/out/
+frontend/build/
+
+# ─────────────────────────────
+# Yarn & PnP
+# ─────────────────────────────
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# ─────────────────────────────
+# Misc
+# ─────────────────────────────
+.DS_Store
+*.pem
+next-env.d.ts
+*.tsbuildinfo
+
+# ─────────────────────────────
+# Vercel / Deployment
+# ─────────────────────────────
+.vercel
