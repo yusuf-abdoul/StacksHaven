@@ -31,22 +31,12 @@ export default function WithdrawForm() {
 
     try {
       const sharesToBurn = parseSTX(shares);
-      const result = await withdrawFromVault(sharesToBurn);
+      await withdrawFromVault(sharesToBurn);
 
-      toast.success(
-        <div>
-          <div className="font-bold">Withdrawal successful!</div>
-          <a
-            href={`https://explorer.hiro.so/txid/${result.txid}?chain=testnet`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs underline"
-          >
-            View transaction
-          </a>
-        </div>,
-        { id: toastId, duration: 5000 }
-      );
+      toast.success('Withdrawal submitted! Confirm the transaction in your wallet.', {
+        id: toastId,
+        duration: 5000,
+      });
 
       setShares('');
     } catch (error) {
@@ -151,8 +141,8 @@ export default function WithdrawForm() {
             {!connected
               ? 'Connect Wallet First'
               : loading
-              ? 'Processing...'
-              : 'Withdraw from Vault'}
+                ? 'Processing...'
+                : 'Withdraw from Vault'}
           </button>
         </div>
       </div>

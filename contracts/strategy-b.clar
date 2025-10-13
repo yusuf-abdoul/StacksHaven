@@ -1,63 +1,64 @@
-;; title: strategy-b
-;; version:
-;; summary:
-;; description:
+;; ------------------------------------------------------------
+;; Strategy B - STX Lending Strategy (Mid-risk)
+;; ------------------------------------------------------------
 
+;; strategy-b: APY 6.5%
+;; Simple strategy contract: deposit/withdraw/harvest
 
-;; Strategy B - STX Lending via Arkadiko/ALEX
+(define-constant STRATEGY-NAME "strategy-b")
 (define-constant ERR_INSUFFICIENT_FUNDS (err u100))
-(define-constant ERR_UNAUTHORIZED (err u101))
+(define-constant ERR_HARVEST_TOO_SOON (err u101))
 
-(define-data-var strategy-b-tvl uint u0)
-(define-data-var strategy-b-apy uint u650) ;; 6.5% APY
 
-(define-map strategy-b-deposits principal uint)
+(define-data-var apy uint u650) ;; 6.5% APY for strategy-a
+(define-data-var min-harvest-interval uint u72) ;; ~1 day (blocks)
+(define-data-var last-harvest-block uint u0)
+(define-data-var total-tvl uint u0)
 
-(define-read-only (get-strategy-b-balance (user principal))
-  (default-to u0 (map-get? strategy-b-deposits user))
+(define-map deposits principal uint)
+
+(define-read-only (get-strategy-name)
+  (ok STRATEGY-NAME)
 )
 
-(define-read-only (get-strategy-b-rewards (user principal))
-  (let (
-    (balance (get-strategy-b-balance user))
-    (apy (var-get strategy-b-apy))
-  )
-    ;; Mock calculation for demo
-    (/ (* balance apy) u10000)
-  )
+(define-read-only (get-tvl)
+  (ok (var-get total-tvl))
 )
 
-(define-public (lend-stx (amount uint))
+(define-read-only (get-last-harvest)
+  (ok (var-get last-harvest-block))
+)
+
+(define-public (deposit (amount uint))
   (let ((user tx-sender))
     (asserts! (> amount u0) ERR_INSUFFICIENT_FUNDS)
-    
-    (map-set strategy-b-deposits user 
-      (+ (get-strategy-b-balance user) amount))
-    (var-set strategy-b-tvl (+ (var-get strategy-b-tvl) amount))
-    
+    (map-set deposits user (+ (default-to u0 (map-get? deposits user)) amount))
+    (var-set total-tvl (+ (var-get total-tvl) amount))
     (ok true)
   )
 )
 
-(define-public (withdraw-lend (amount uint))
-  (let (
-    (user tx-sender)
-    (balance (get-strategy-b-balance user))
-  )
+(define-public (withdraw (amount uint))
+  (let ((user tx-sender)
+        (balance (default-to u0 (map-get? deposits user))))
     (asserts! (>= balance amount) ERR_INSUFFICIENT_FUNDS)
-    
-    (map-set strategy-b-deposits user (- balance amount))
-    (var-set strategy-b-tvl (- (var-get strategy-b-tvl) amount))
-    
+    (map-set deposits user (- balance amount))
+    (var-set total-tvl (- (var-get total-tvl) amount))
     (ok amount)
   )
 )
 
-(define-public (claim-lending-rewards)
-  (let (
-    (user tx-sender)
-    (rewards (get-strategy-b-rewards user))
-  )
-    (ok rewards)
+;; harvest returns (ok yield:uint). Harvester will call it.
+(define-public (harvest)
+  (let ((blocks-elapsed (- stacks-block-height (var-get last-harvest-block))))
+    ;; optional timing guard: only allow harvest after min interval
+    (if (>= blocks-elapsed (var-get min-harvest-interval))
+      (let ((yield (/ (* (var-get total-tvl) (var-get apy)) u10000)))
+        (var-set total-tvl (+ (var-get total-tvl) yield))
+        (var-set last-harvest-block stacks-block-height)
+        (ok yield))
+      ;; nothing to harvest yet
+      (ok u0)
+    )
   )
 )

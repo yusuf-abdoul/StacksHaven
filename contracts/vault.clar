@@ -1,30 +1,18 @@
-;; title: vault
-;; version:
-;; summary:
-;; description:
-
-;; Yield Aggregator Vault Contract
-;; Manages user deposits, vault shares, and strategy allocations
-
-;; Constants
-(define-constant contract-owner tx-sender)
-(define-constant ERR_OWNER_ONLY (err u100))
-(define-constant ERR_INSUFFICIENT_BALANCE (err u101))
+;; vault.clar
+(define-constant ERR_NOT_AUTHORIZED (err u104))
+(define-constant ERR_INVALID_AMOUNT (err u105))
 (define-constant ERR_INVALID_ALLOCATION (err u102))
 (define-constant ERR_ZERO_AMOUNT (err u103))
-(define-constant ERR_NOT_AUTHORIZED (err u104))
 
-;; Data Variables
+;; Set deployer address for testnet deployment
+(define-constant OWNER 'ST1FMD172MZVR6A8S4N5CKESB5N6T0N8XVCDECRJJ)
+(define-constant STRATEGY_A 'ST1FMD172MZVR6A8S4N5CKESB5N6T0N8XVCDECRJJ.strategy-a)
+(define-constant STRATEGY_B 'ST1FMD172MZVR6A8S4N5CKESB5N6T0N8XVCDECRJJ.strategy-b)
+(define-constant STRATEGY_C 'ST1FMD172MZVR6A8S4N5CKESB5N6T0N8XVCDECRJJ.strategy-c)
+(define-constant CONTRACT_HARVESTER 'ST1FMD172MZVR6A8S4N5CKESB5N6T0N8XVCDECRJJ.harvester)
+
+(define-data-var total-assets uint u0) ;; microSTX units
 (define-data-var total-shares uint u0)
-(define-data-var total-assets uint u0)
-(define-data-var performance-fee uint u200) ;; 2% = 200 basis points
-
-;; Strategy allocation limits (basis points, total = 10000)
-(define-data-var strategy-a-allocation uint u0)
-(define-data-var strategy-b-allocation uint u0)
-(define-data-var strategy-c-allocation uint u0)
-
-;; Data Maps
 (define-map user-shares
   principal
   uint
@@ -37,34 +25,16 @@
     strategy-c: uint,
   }
 )
-
-;; Strategy balances
 (define-map strategy-balances
   (string-ascii 20)
   uint
 )
 
-;; Read-only functions
-(define-read-only (get-user-shares (user principal))
-  (default-to u0 (map-get? user-shares user))
-)
-
-(define-read-only (get-user-allocation (user principal))
-  (default-to {
-    strategy-a: u0,
-    strategy-b: u0,
-    strategy-c: u0,
-  }
-    (map-get? user-allocations user)
-  )
-)
-
-(define-read-only (get-total-shares)
-  (var-get total-shares)
-)
-
 (define-read-only (get-total-assets)
-  (var-get total-assets)
+  (ok (var-get total-assets))
+)
+(define-read-only (get-total-shares)
+  (ok (var-get total-shares))
 )
 
 (define-read-only (get-share-price)
@@ -73,28 +43,24 @@
       (assets (var-get total-assets))
     )
     (if (is-eq shares u0)
-      u1000000 ;; 1:1 ratio initially (with 6 decimals)
-      (/ (* assets u1000000) shares)
+      (ok u1000000) ;; 1:1 with 6 decimals
+      (ok (/ (* assets u1000000) shares))
     )
   )
 )
 
-(define-read-only (get-user-balance (user principal))
-  (let (
-      (shares (get-user-shares user))
-      (price (get-share-price))
-    )
-    (/ (* shares price) u1000000)
-  )
+(define-read-only (get-user-shares (user principal))
+  (ok (default-to u0 (map-get? user-shares user)))
 )
 
-(define-read-only (get-strategy-balance (strategy (string-ascii 20)))
-  (default-to u0 (map-get? strategy-balances strategy))
+(define-read-only (get-user-allocation (user principal))
+  (ok (default-to {
+    strategy-a: u0,
+    strategy-b: u0,
+    strategy-c: u0
+  } (map-get? user-allocations user)))
 )
 
-;; Public functions
-
-;; Deposit STX into vault
 (define-public (deposit
     (amount uint)
     (allocations {
@@ -105,65 +71,109 @@
   )
   (let (
       (user tx-sender)
-      (current-shares (get-user-shares user))
-      (share-price (get-share-price))
-      (shares-to-mint (/ (* amount u1000000) share-price))
       (total (+ (get strategy-a allocations) (get strategy-b allocations)
         (get strategy-c allocations)
       ))
     )
-    ;; Validations
     (asserts! (> amount u0) ERR_ZERO_AMOUNT)
     (asserts! (is-eq total u10000) ERR_INVALID_ALLOCATION)
-    ;; Must equal 100%
 
-    ;; Transfer STX to contract
-    (try! (stx-transfer? amount user (as-contract tx-sender)))
+    ;; transfer STX from user to vault contract
+    (try! (stx-transfer? amount tx-sender (as-contract tx-sender)))
+    ;; wrapped in try! to bubble error
 
-    ;; Update shares
-    (map-set user-shares user (+ current-shares shares-to-mint))
-    (var-set total-shares (+ (var-get total-shares) shares-to-mint))
+    ;; mint shares (simple model: shares = amount * 1e6 / share-price)
+    (let ((share-price (unwrap-panic (get-share-price))))
+      (let ((shares-to-mint (/ (* amount u1000000) share-price)))
+        (map-set user-shares user
+          (+ (default-to u0 (map-get? user-shares user)) shares-to-mint)
+        )
+        (var-set total-shares (+ (var-get total-shares) shares-to-mint))
+      )
+    )
+
+    ;; update totals
     (var-set total-assets (+ (var-get total-assets) amount))
-
-    ;; Set user allocations
     (map-set user-allocations user allocations)
 
-    ;; Distribute to strategies
-    (try! (distribute-to-strategies amount allocations))
+    ;; distribute to strategies: call their deposit functions; if any fails, whole tx fails
+    (let (
+        (amount-a (/ (* amount (get strategy-a allocations)) u10000))
+        (amount-b (/ (* amount (get strategy-b allocations)) u10000))
+        (amount-c (/ (* amount (get strategy-c allocations)) u10000))
+      )
+      (try! (contract-call? STRATEGY_A deposit amount-a))
+      (try! (contract-call? STRATEGY_B deposit amount-b))
+      (try! (contract-call? STRATEGY_C deposit amount-c))
+      ;; update local strategy balances
+      (map-set strategy-balances "strategy-a"
+        (+ (default-to u0 (map-get? strategy-balances "strategy-a")) amount-a)
+      )
+      (map-set strategy-balances "strategy-b"
+        (+ (default-to u0 (map-get? strategy-balances "strategy-b")) amount-b)
+      )
+      (map-set strategy-balances "strategy-c"
+        (+ (default-to u0 (map-get? strategy-balances "strategy-c")) amount-c)
+      )
+    )
 
-    (ok shares-to-mint)
+    (ok true)
   )
 )
 
-;; Withdraw from vault
 (define-public (withdraw (shares uint))
   (let (
       (user tx-sender)
-      (user-shares (get-user-shares user))
-      (share-price (get-share-price))
-      (amount (/ (* shares share-price) u1000000))
-      (user-allocation (get-user-allocation user))
+      (shares-balance (default-to u0 (map-get? user-shares user)))
     )
-    ;; Validations
     (asserts! (> shares u0) ERR_ZERO_AMOUNT)
-    (asserts! (>= user-shares shares) ERR_INSUFFICIENT_BALANCE)
+    (asserts! (>= shares-balance shares) ERR_INVALID_AMOUNT)
 
-    ;; Withdraw from strategies proportionally
-    (try! (withdraw-from-strategies amount user-allocation))
+    ;; compute amount to withdraw
+    (let (
+        (share-price (unwrap-panic (get-share-price)))
+        (amount (/ (* shares share-price) u1000000))
+      )
+      ;; For MVP: simply reduce totals and call withdraw-from-strategy functions proportionally
+      (var-set total-assets (- (var-get total-assets) amount))
+      (map-set user-shares user (- shares-balance shares))
+      (var-set total-shares (- (var-get total-shares) shares))
 
-    ;; Burn shares
-    (map-set user-shares user (- user-shares shares))
-    (var-set total-shares (- (var-get total-shares) shares))
-    (var-set total-assets (- (var-get total-assets) amount))
+      ;; withdraw proportionally from strategies (calls withdraw on strategy contracts)
+      (let (
+          (user-allocation (default-to {
+            strategy-a: u0,
+            strategy-b: u0,
+            strategy-c: u0,
+          }
+            (map-get? user-allocations user)
+          ))
+          (amount-a (/ (* amount (get strategy-a user-allocation)) u10000))
+          (amount-b (/ (* amount (get strategy-b user-allocation)) u10000))
+          (amount-c (/ (* amount (get strategy-c user-allocation)) u10000))
+        )
+        (try! (contract-call? STRATEGY_A withdraw amount-a))
+        (try! (contract-call? STRATEGY_B withdraw amount-b))
+        (try! (contract-call? STRATEGY_C withdraw amount-c))
+        (map-set strategy-balances "strategy-a"
+          (- (default-to u0 (map-get? strategy-balances "strategy-a")) amount-a)
+        )
+        (map-set strategy-balances "strategy-b"
+          (- (default-to u0 (map-get? strategy-balances "strategy-b")) amount-b)
+        )
+        (map-set strategy-balances "strategy-c"
+          (- (default-to u0 (map-get? strategy-balances "strategy-c")) amount-c)
+        )
 
-    ;; Transfer STX to user
-    (try! (as-contract (stx-transfer? amount tx-sender user)))
+        ;; transfer STX back to user from vault contract
+        (try! (as-contract (stx-transfer? amount tx-sender user)))
 
-    (ok amount)
+        (ok amount)
+      )
+    )
   )
 )
 
-;; Reallocate user's funds between strategies
 (define-public (reallocate (new-allocations {
   strategy-a: uint,
   strategy-b: uint,
@@ -174,91 +184,34 @@
       (total (+ (get strategy-a new-allocations) (get strategy-b new-allocations)
         (get strategy-c new-allocations)
       ))
-      (user-balance (get-user-balance user))
     )
-    ;; Validations
     (asserts! (is-eq total u10000) ERR_INVALID_ALLOCATION)
-    (asserts! (> user-balance u0) ERR_INSUFFICIENT_BALANCE)
-
-    ;; Update allocations
     (map-set user-allocations user new-allocations)
-
-    ;; In production, this would trigger actual rebalancing
-    ;; For hackathon, we just update the allocation tracking
-
+    ;; NOTE: We do NOT perform on-chain rebalancing in MVP
     (ok true)
   )
 )
 
-;; Private functions
-
-(define-private (distribute-to-strategies
-    (amount uint)
-    (allocations {
-      strategy-a: uint,
-      strategy-b: uint,
-      strategy-c: uint,
-    })
-  )
-
-  (let (
-      (amount-a (/ (* amount (get strategy-a allocations)) u10000))
-      (amount-b (/ (* amount (get strategy-b allocations)) u10000))
-      (amount-c (/ (* amount (get strategy-c allocations)) u10000))
-    )
-    ;; Update strategy balances
-    (map-set strategy-balances "strategy-a"
-      (+ (get-strategy-balance "strategy-a") amount-a)
-    )
-    (map-set strategy-balances "strategy-b"
-      (+ (get-strategy-balance "strategy-b") amount-b)
-    )
-    (map-set strategy-balances "strategy-c"
-      (+ (get-strategy-balance "strategy-c") amount-c)
-    )
-
-    (ok true)
-  )
-)
-
-(define-private (withdraw-from-strategies
-    (amount uint)
-    (allocations {
-      strategy-a: uint,
-      strategy-b: uint,
-      strategy-c: uint,
-    })
-  )
-  (let (
-      (amount-a (/ (* amount (get strategy-a allocations)) u10000))
-      (amount-b (/ (* amount (get strategy-b allocations)) u10000))
-      (amount-c (/ (* amount (get strategy-c allocations)) u10000))
-    )
-    ;; Update strategy balances
-    (map-set strategy-balances "strategy-a"
-      (- (get-strategy-balance "strategy-a") amount-a)
-    )
-    (map-set strategy-balances "strategy-b"
-      (- (get-strategy-balance "strategy-b") amount-b)
-    )
-    (map-set strategy-balances "strategy-c"
-      (- (get-strategy-balance "strategy-c") amount-c)
-    )
-
-    (ok true)
-  )
-)
-
-;; Admin functions for harvester
+;; Called by Harvester contract to report yield per strategy
+;; Only harvester contract can call this
 (define-public (report-yield
     (strategy (string-ascii 20))
     (yield-amount uint)
   )
   (begin
-    ;; In production, add authorization check for harvester contract
+    (asserts! (is-eq tx-sender CONTRACT_HARVESTER) ERR_NOT_AUTHORIZED)
+    (asserts! (> yield-amount u0) ERR_INVALID_AMOUNT)
+    (asserts!
+      (or
+        (is-eq strategy "strategy-a")
+        (is-eq strategy "strategy-b")
+        (is-eq strategy "strategy-c")
+      )
+      ERR_INVALID_ALLOCATION
+    )
     (var-set total-assets (+ (var-get total-assets) yield-amount))
     (map-set strategy-balances strategy
-      (+ (get-strategy-balance strategy) yield-amount)
+      (+ (default-to u0 (map-get? strategy-balances strategy)) yield-amount)
     )
     (ok true)
   )

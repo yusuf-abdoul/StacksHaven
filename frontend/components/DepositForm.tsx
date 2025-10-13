@@ -42,20 +42,6 @@ export default function DepositForm() {
       // const result = await depositToVault(microSTX, allocations);
       await depositToVault(microSTX, allocations);
 
-      // toast.success(
-      //   <div>
-      //     <div className="font-bold">Deposit successful!</div>
-      //     <a
-      //       href={`https://explorer.hiro.so/txid/${result.txid}?chain=testnet`}
-      //       target="_blank"
-      //       rel="noopener noreferrer"
-      //       className="text-xs underline"
-      //     >
-      //       View transaction
-      //     </a>
-      //   </div>,
-      //   { id: toastId, duration: 5000 }
-      // );
       toast.success('Deposit submitted! Confirm the transaction in your wallet.', {
         id: toastId,
         duration: 5000,

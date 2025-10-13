@@ -5,10 +5,6 @@ authors = []
 telemetry = true
 cache_dir = './.cache'
 requirements = []
-[contracts.harvester]
-path = 'contracts/harvester.clar'
-clarity_version = 3
-epoch = 'latest'
 
 [contracts.strategy-a]
 path = 'contracts/strategy-a.clar'
@@ -22,6 +18,11 @@ epoch = 'latest'
 
 [contracts.strategy-c]
 path = 'contracts/strategy-c.clar'
+clarity_version = 3
+epoch = 'latest'
+
+[contracts.harvester]
+path = 'contracts/harvester.clar'
 clarity_version = 3
 epoch = 'latest'
 
