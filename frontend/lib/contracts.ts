@@ -43,29 +43,53 @@ export async function getVaultData(): Promise<VaultData | null> {
 
 export async function getUserVaultData(userAddress: string): Promise<UserData | null> {
     try {
-        const [shares, allocations] = await Promise.all([
-            readContract<number>(CONTRACTS.vault, 'get-user-shares', [
+        // const [shares, allocations] = await Promise.all([
+        //     readContract<number>(CONTRACTS.vault, 'get-user-shares', [
+        //         principalCV(userAddress),
+        //     ]),
+        //     readContract<any>(CONTRACTS.vault, 'get-user-allocation', [
+        //         principalCV(userAddress),
+        //     ]),
+        // ]);
+        const [sharesResult, allocationsResult] = await Promise.all([
+            readContract<any>(CONTRACTS.vault, 'get-user-shares', [
                 principalCV(userAddress),
             ]),
             readContract<any>(CONTRACTS.vault, 'get-user-allocation', [
                 principalCV(userAddress),
             ]),
         ]);
-
+        const shares = sharesResult?.value ? Number(sharesResult.value) : 0;
         if (shares === null) return null;
 
         const vaultData = await getVaultData();
-        const balance = vaultData ? shares * vaultData.sharePrice : 0;
+        const balance = vaultData ? (shares * vaultData.sharePrice) / 1_000_000 : shares / 1_000_000;
+
+        // Extract allocations from tuple
+        const allocs = allocationsResult?.value?.data || {};
+        const strategyA = allocs['strategy-a']?.value ? Number(allocs['strategy-a'].value) : 0;
+        const strategyB = allocs['strategy-b']?.value ? Number(allocs['strategy-b'].value) : 0;
+        const strategyC = allocs['strategy-c']?.value ? Number(allocs['strategy-c'].value) : 0;
 
         return {
-            balance,
-            shares,
-            deposited: 0, // Track separately or calculate from history
-            earnings: 0, // Calculate from share price appreciation
-            allocations: allocations || {
-                strategyA: 0,
-                strategyB: 0,
-                strategyC: 0,
+            //     balance,
+            //     shares,
+            //     deposited: 0, // Track separately or calculate from history
+            //     earnings: 0, // Calculate from share price appreciation
+            //     allocations: allocations || {
+            //         strategyA: 0,
+            //         strategyB: 0,
+            //         strategyC: 0,
+            //     },
+            // };
+            balance: balance,
+            shares: shares / 1_000_000, // Convert to STX
+            deposited: balance, // Approximate for now
+            earnings: balance - (shares / 1_000_000), // Share price appreciation
+            allocations: {
+                strategyA,
+                strategyB,
+                strategyC,
             },
         };
     } catch (error) {
@@ -112,7 +136,7 @@ export async function depositToVault(
 
 }
 
-export async function withdrawFromVault(shares: number){
+export async function withdrawFromVault(shares: number) {
     const userAddress = getUserAddress();
     if (!userAddress) throw new Error('Wallet not connected');
 

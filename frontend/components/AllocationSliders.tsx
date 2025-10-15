@@ -173,7 +173,7 @@ export default function AllocationSliders() {
                     step="100"
                     value={allocation}
                     onChange={(e) => handleAllocationChange(strategy.key, parseInt(e.target.value))}
-                    className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer slider"
+                    className="w-full h-3 rounded-lg appearance-none cursor-pointer slider focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                   />
 
                   <div className="flex justify-between text-xs text-purple-300">
@@ -257,7 +257,7 @@ export default function AllocationSliders() {
           <button
             onClick={handleReallocate}
             disabled={!connected || loading || totalAllocation !== 10000}
-            className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 disabled:opacity-50 disabled:cursor-not-allowed py-4 rounded-lg font-bold text-lg transition-all"
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 disabled:cursor-not-allowed py-4 rounded-lg font-bold text-lg transition-all"
           >
             {!connected
               ? 'Connect Wallet First'

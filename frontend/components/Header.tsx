@@ -14,7 +14,7 @@ export default function Header() {
     <header className="border-b border-white/10 backdrop-blur-sm bg-black/20 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+          <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center">
             <TrendingUp className="w-6 h-6" />
           </div>
           <div>
@@ -27,7 +27,7 @@ export default function Header() {
           <button
             onClick={connect}
             disabled={loading}
-            className="flex items-center space-x-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 disabled:opacity-50 px-6 py-2.5 rounded-lg font-semibold transition-all"
+            className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 px-6 py-2.5 rounded-lg font-semibold transition-all"
           >
             <Wallet className="w-4 h-4" />
             <span>{loading ? 'Loading...' : 'Connect Wallet'}</span>

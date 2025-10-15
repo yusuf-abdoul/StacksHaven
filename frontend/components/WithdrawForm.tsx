@@ -49,7 +49,7 @@ export default function WithdrawForm() {
 
   const setMaxShares = () => {
     if (userData) {
-      setShares(userData.shares.toString());
+      setShares((userData.shares * 1_000_000).toString());
     }
   };
 
@@ -136,7 +136,7 @@ export default function WithdrawForm() {
           <button
             onClick={handleWithdraw}
             disabled={!connected || !shares || loading}
-            className="w-full bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 disabled:opacity-50 disabled:cursor-not-allowed py-4 rounded-lg font-bold text-lg transition-all"
+            className="w-full bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed py-4 rounded-lg font-bold text-lg transition-all"
           >
             {!connected
               ? 'Connect Wallet First'

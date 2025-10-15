@@ -39,13 +39,13 @@ export default function Dashboard() {
 
   const getWeightedAPY = () => {
     if (!userData?.allocations) return '0.00';
-    
+
     const totalBasis = 10000;
     const weightedAPY =
       (strategies[0].apy * userData.allocations.strategyA) / totalBasis +
       (strategies[1].apy * userData.allocations.strategyB) / totalBasis +
       (strategies[2].apy * userData.allocations.strategyC) / totalBasis;
-    
+
     return weightedAPY.toFixed(2);
   };
 
@@ -81,10 +81,10 @@ export default function Dashboard() {
             <Wallet className="w-5 h-5 text-blue-400" />
           </div>
           <div className="text-3xl font-bold">
-            {userData ? `${formatSTX(userData.balance)} STX` : '0 STX'}
+            {userData ? `${(userData.balance)} STX` : '0 STX'}
           </div>
           <div className="text-xs text-purple-300 mt-1">
-            {userData ? `${userData.shares.toFixed(0)} vault shares` : '0 shares'}
+            {userData ? `${(userData.shares).toFixed(2)} vault shares` : '0 shares'}
           </div>
         </div>
 
@@ -94,7 +94,7 @@ export default function Dashboard() {
             <TrendingUp className="w-5 h-5 text-purple-400" />
           </div>
           <div className="text-3xl font-bold text-green-400">
-            +{userData ? formatSTX(userData.earnings) : '0'} STX
+            +{userData ? (userData.earnings) : '0'} STX
           </div>
           <div className="text-xs text-purple-300 mt-1">
             {userData && userData.deposited > 0
@@ -129,11 +129,10 @@ export default function Dashboard() {
                   <div className="text-3xl mb-2">{strategy.icon}</div>
                   <h3 className="font-bold text-lg">{strategy.name}</h3>
                   <span
-                    className={`text-xs px-2 py-1 rounded-full ${
-                      strategy.risk === 'Low'
+                    className={`text-xs px-2 py-1 rounded-full ${strategy.risk === 'Low'
                         ? 'bg-green-500/20 text-green-400'
                         : 'bg-yellow-500/20 text-yellow-400'
-                    }`}
+                      }`}
                   >
                     {strategy.risk} Risk
                   </span>
@@ -164,7 +163,7 @@ export default function Dashboard() {
               <div className="mt-4 pt-4 border-t border-white/10">
                 <div className="w-full bg-white/10 rounded-full h-2">
                   <div
-                    className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all"
+                    className="bg-indigo-600 h-2 rounded-full transition-all"
                     style={{ width: `${allocation / 100}%` }}
                   />
                 </div>

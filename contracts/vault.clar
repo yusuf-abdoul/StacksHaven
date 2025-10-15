@@ -5,11 +5,11 @@
 (define-constant ERR_ZERO_AMOUNT (err u103))
 
 ;; Set deployer address for testnet deployment
-(define-constant OWNER 'ST1FMD172MZVR6A8S4N5CKESB5N6T0N8XVCDECRJJ)
-(define-constant STRATEGY_A 'ST1FMD172MZVR6A8S4N5CKESB5N6T0N8XVCDECRJJ.strategy-a)
-(define-constant STRATEGY_B 'ST1FMD172MZVR6A8S4N5CKESB5N6T0N8XVCDECRJJ.strategy-b)
-(define-constant STRATEGY_C 'ST1FMD172MZVR6A8S4N5CKESB5N6T0N8XVCDECRJJ.strategy-c)
-(define-constant CONTRACT_HARVESTER 'ST1FMD172MZVR6A8S4N5CKESB5N6T0N8XVCDECRJJ.harvester)
+(define-constant OWNER 'ST3SDPDCDVF45R7ZWKSBXF20AXF6AWR5AMAC72BER)
+(define-constant STRATEGY_A 'ST3SDPDCDVF45R7ZWKSBXF20AXF6AWR5AMAC72BER.strategy-a)
+(define-constant STRATEGY_B 'ST3SDPDCDVF45R7ZWKSBXF20AXF6AWR5AMAC72BER.strategy-b)
+(define-constant STRATEGY_C 'ST3SDPDCDVF45R7ZWKSBXF20AXF6AWR5AMAC72BER.strategy-c)
+(define-constant CONTRACT_HARVESTER 'ST3SDPDCDVF45R7ZWKSBXF20AXF6AWR5AMAC72BER.harvester)
 
 (define-data-var total-assets uint u0) ;; microSTX units
 (define-data-var total-shares uint u0)
@@ -78,8 +78,8 @@
     (asserts! (> amount u0) ERR_ZERO_AMOUNT)
     (asserts! (is-eq total u10000) ERR_INVALID_ALLOCATION)
 
-    ;; transfer STX from user to vault contract
-    (try! (stx-transfer? amount tx-sender (as-contract tx-sender)))
+  ;; transfer STX from user to vault contract
+  (try! (stx-transfer? amount tx-sender (as-contract tx-sender)))
     ;; wrapped in try! to bubble error
 
     ;; mint shares (simple model: shares = amount * 1e6 / share-price)
@@ -102,9 +102,9 @@
         (amount-b (/ (* amount (get strategy-b allocations)) u10000))
         (amount-c (/ (* amount (get strategy-c allocations)) u10000))
       )
-      (try! (contract-call? STRATEGY_A deposit amount-a))
-      (try! (contract-call? STRATEGY_B deposit amount-b))
-      (try! (contract-call? STRATEGY_C deposit amount-c))
+      ;; (try! (contract-call? STRATEGY_A deposit amount-a))
+      ;; (try! (contract-call? STRATEGY_B deposit amount-b))
+      ;; (try! (contract-call? STRATEGY_C deposit amount-c))
       ;; update local strategy balances
       (map-set strategy-balances "strategy-a"
         (+ (default-to u0 (map-get? strategy-balances "strategy-a")) amount-a)
@@ -152,9 +152,9 @@
           (amount-b (/ (* amount (get strategy-b user-allocation)) u10000))
           (amount-c (/ (* amount (get strategy-c user-allocation)) u10000))
         )
-        (try! (contract-call? STRATEGY_A withdraw amount-a))
-        (try! (contract-call? STRATEGY_B withdraw amount-b))
-        (try! (contract-call? STRATEGY_C withdraw amount-c))
+        ;; (try! (contract-call? STRATEGY_A withdraw amount-a))
+        ;; (try! (contract-call? STRATEGY_B withdraw amount-b))
+        ;; (try! (contract-call? STRATEGY_C withdraw amount-c))
         (map-set strategy-balances "strategy-a"
           (- (default-to u0 (map-get? strategy-balances "strategy-a")) amount-a)
         )
@@ -216,3 +216,11 @@
     (ok true)
   )
 )
+
+(define-public (claim-fees (recipient principal) (amount uint))
+     (begin
+       (asserts! (is-eq tx-sender OWNER) ERR_NOT_AUTHORIZED)
+       (try! (as-contract (stx-transfer? amount tx-sender recipient)))
+       (ok true)
+     )
+   )

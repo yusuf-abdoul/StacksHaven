@@ -10,35 +10,35 @@ plan:
       transactions:
         - contract-publish:
             contract-name: harvester
-            expected-sender: ST1FMD172MZVR6A8S4N5CKESB5N6T0N8XVCDECRJJ
+            expected-sender: ST3SDPDCDVF45R7ZWKSBXF20AXF6AWR5AMAC72BER
             cost: 37650
             path: contracts/harvester.clar
             anchor-block-only: true
             clarity-version: 3
         - contract-publish:
             contract-name: strategy-a
-            expected-sender: ST1FMD172MZVR6A8S4N5CKESB5N6T0N8XVCDECRJJ
+            expected-sender: ST3SDPDCDVF45R7ZWKSBXF20AXF6AWR5AMAC72BER
             cost: 17430
             path: contracts/strategy-a.clar
             anchor-block-only: true
             clarity-version: 3
         - contract-publish:
             contract-name: strategy-b
-            expected-sender: ST1FMD172MZVR6A8S4N5CKESB5N6T0N8XVCDECRJJ
+            expected-sender: ST3SDPDCDVF45R7ZWKSBXF20AXF6AWR5AMAC72BER
             cost: 19820
             path: contracts/strategy-b.clar
             anchor-block-only: true
             clarity-version: 3
         - contract-publish:
             contract-name: strategy-c
-            expected-sender: ST1FMD172MZVR6A8S4N5CKESB5N6T0N8XVCDECRJJ
+            expected-sender: ST3SDPDCDVF45R7ZWKSBXF20AXF6AWR5AMAC72BER
             cost: 19480
             path: contracts/strategy-c.clar
             anchor-block-only: true
             clarity-version: 3
         - contract-publish:
             contract-name: vault
-            expected-sender: ST1FMD172MZVR6A8S4N5CKESB5N6T0N8XVCDECRJJ
+            expected-sender: ST3SDPDCDVF45R7ZWKSBXF20AXF6AWR5AMAC72BER
             cost: 67170
             path: contracts/vault.clar
             anchor-block-only: true

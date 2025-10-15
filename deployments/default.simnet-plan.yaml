@@ -58,34 +58,33 @@ genesis:
     - pox-4
     - signers
     - signers-voting
-    - costs-4
 plan:
   batches:
     - id: 0
       transactions:
         - emulated-contract-publish:
             contract-name: harvester
-            emulated-sender: ST1FMD172MZVR6A8S4N5CKESB5N6T0N8XVCDECRJJ
+            emulated-sender: ST3SDPDCDVF45R7ZWKSBXF20AXF6AWR5AMAC72BER
             path: contracts/harvester.clar
             clarity-version: 3
         - emulated-contract-publish:
             contract-name: strategy-a
-            emulated-sender: ST1FMD172MZVR6A8S4N5CKESB5N6T0N8XVCDECRJJ
+            emulated-sender: ST3SDPDCDVF45R7ZWKSBXF20AXF6AWR5AMAC72BER
             path: contracts/strategy-a.clar
             clarity-version: 3
         - emulated-contract-publish:
             contract-name: strategy-b
-            emulated-sender: ST1FMD172MZVR6A8S4N5CKESB5N6T0N8XVCDECRJJ
+            emulated-sender: ST3SDPDCDVF45R7ZWKSBXF20AXF6AWR5AMAC72BER
             path: contracts/strategy-b.clar
             clarity-version: 3
         - emulated-contract-publish:
             contract-name: strategy-c
-            emulated-sender: ST1FMD172MZVR6A8S4N5CKESB5N6T0N8XVCDECRJJ
+            emulated-sender: ST3SDPDCDVF45R7ZWKSBXF20AXF6AWR5AMAC72BER
             path: contracts/strategy-c.clar
             clarity-version: 3
         - emulated-contract-publish:
             contract-name: vault
-            emulated-sender: ST1FMD172MZVR6A8S4N5CKESB5N6T0N8XVCDECRJJ
+            emulated-sender: ST3SDPDCDVF45R7ZWKSBXF20AXF6AWR5AMAC72BER
             path: contracts/vault.clar
             clarity-version: 3
       epoch: "3.2"

@@ -22,7 +22,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 text-white">
+        <div className="min-h-screen bg-indigo-950 text-white">
           <Header />
           <main className="max-w-7xl mx-auto px-4 py-8">
             {children}
