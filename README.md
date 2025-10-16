@@ -1,88 +1,95 @@
-#  YieldHaven — Maximize Your DeFi Returns on Stacks
+#  YieldHaven — The Yearn Finance of the Stacks Ecosystem
 
-> _The Yearn Finance of the Stacks ecosystem — a yield aggregator that automates DeFi strategies for optimal yield._
+> **Automated yield aggregation built on Stacks — empowering users to earn more from Bitcoin-backed DeFi.**
 
 ![YieldHaven Logo](./assets/logo.png)
 
 ---
 
-## 🚀 Overview
+##  Problem Statement
 
-**YieldHaven** is a **decentralized yield aggregator** built on the **Stacks blockchain**, designed to help users maximize returns from DeFi protocols such as **ALEX**, **Arkadiko**, and **Stackswap**.  
-It simplifies yield farming by pooling users’ STX deposits into a **Vault**, which automatically allocates capital across multiple **strategies** to generate optimized returns.
+DeFi on Stacks is growing, with protocols like **ALEX**, **Arkadiko**, and **Stackswap** offering various yield opportunities.  
+However, users face key challenges:
 
-By abstracting away the complexity of manual DeFi management, YieldHaven allows users to:
-- Deposit STX once.
-- Automatically compound and rebalance yield daily.
-- Track performance, earnings, and strategy allocations in real time.
+- **Fragmented yield sources:** Users must manually move funds between multiple protocols.  
+- **Complex strategy management:** Compounding rewards and tracking APY requires technical knowledge.  
+- **Inefficient capital use:** Idle liquidity results in lower returns.  
+
+###  The Problem:
+> Most Stacks DeFi users miss out on optimal yield due to fragmentation, manual management, and lack of automation.
 
 ---
 
-## 🧩 Core Architecture
+##  Our Solution — YieldHaven
+
+**YieldHaven** is a **yield aggregator** built on the **Stacks blockchain**, designed to **automatically optimize returns** across Stacks-based DeFi protocols.
+
+Users simply:
+1. Deposit STX into the **Vault**  
+2. The Vault allocates funds across **multiple strategies (staking, lending, LPs)**  
+3. The **Harvester** periodically compounds and updates yield  
+4. Users withdraw anytime, earning maximized returns  
+
+> Think of it as *“one-click yield optimization for the Bitcoin economy.”*
+
+---
+
+##  Evidence of Real User Need
+
+### Current Pain Points:
+- Manual yield tracking across different platforms (ALEX, Arkadiko, Stackswap)  
+- High learning curve for new users entering DeFi  
+- Missed rewards due to lack of automation  
+
+###  What Users Want:
+- Simplicity → *“I just want to earn yield easily.”*  
+- Automation → *“I don’t want to move funds every week.”*  
+- Transparency → *“I want to see my performance and APY clearly.”*  
+
+**YieldHaven** addresses these directly — giving both new and experienced users a **single, transparent dashboard** for yield aggregation.
+
+---
+
+## Fit and Relevance to Bitcoin / Stacks Ecosystem
+
+- Built **natively on Stacks**, secured by **Bitcoin finality**  
+- Integrates with existing DeFi protocols (ALEX, Arkadiko, etc.)  
+- Utilizes **Clarity smart contracts** for transparent and auditable yield logic  
+- Promotes **Bitcoin utility** through stacking, lending, and liquidity participation  
+
+> YieldHaven bridges liquidity and simplicity — helping more users earn yield on Bitcoin-backed assets through Stacks.
+
+---
+
+##  Technical Architecture
 
 | Component | Description |
 |------------|--------------|
-| **Vault Contract** | Manages user deposits, minting shares that represent ownership in the vault. Handles withdrawals and share accounting. |
-| **Harvester Contract** | Collects and compounds rewards from active strategies. Updates the vault’s share price based on realized yield. |
-| **Strategy Contracts (A, B, C)** | Simulate or connect to real DeFi opportunities — staking, lending, or liquidity provision — and report APY data to the Vault. |
-| **Frontend (React + Clarity SDK)** | User dashboard to deposit/withdraw, view APY, allocations, and earnings in STX. |
-| **API Layer / Oracle (future update) | Fetches real-time strategy data (APY, TVL, protocol health) for accurate yield distribution. |
+| **Vault Contract** | Receives STX deposits, mints user shares, and manages withdrawals. |
+| **Harvester Contract** | Collects rewards, compounds them, and updates vault share price. |
+| **Strategy Contracts** | Simulate staking/lending/LP rewards; later integrate with real DeFi protocols. |
+| **Frontend Dashboard** | React interface for deposits, withdrawals, and real-time yield tracking. |
+
+###  Early Technical Feasibility
+- ✅ Functional Clarity contracts for Vault, Harvester, and Mock Strategies  
+- ✅ Working test deployments via **Clarinet**  
+- ✅ Frontend integrated with **Stacks.js** wallet  
+- ✅ Simulated APY logic every 12 hours to mimic yield compounding  
 
 ---
 
-## ⚙️ How It Works
-
-1. **Deposit:**  
-   Users deposit STX into the **Vault** and receive vault shares.
-
-2. **Allocation:**  
-   The **Vault** automatically distributes capital across multiple **strategies** based on predefined weights or dynamic optimization.
-
-3. **Harvesting:**  
-   The **Harvester** periodically collects rewards, compounds them, and updates the **share price**.
-
-4. **Withdrawal:**  
-   Users can redeem shares at any time, receiving their principal plus accrued yield.
-
----
-
-## 🧮 APY Simulation
-
-For the hackathon MVP:
-- Each strategy (A, B, C) simulates yield growth by incrementing share price every **12 hours**.
-- Future versions will integrate with live Stacks protocols (ALEX, Arkadiko, Stackswap) for real on-chain yields.
-
----
-
-## 🛠 Tech Stack
-
-- **Smart Contracts:** Clarity (Stacks)  
-- **Frontend:** React + TypeScript + TailwindCSS  
-- **Blockchain Interaction:** Ledger Wallet, Stacks.js, Clarinet  
-- **Testing:** Clarinet 
-- **Deployment:** Stacks Testnet  
-
----
-
-## 🧪 Local Development
+##  Getting Started
 
 ### Prerequisites
 - [Clarinet](https://github.com/hirosystems/clarinet)
 - Node.js v18+
 - npm or yarn
 
-### Steps 
+### Setup
 
 ```bash
-# Clone the repository
 git clone https://github.com/YieldHaven/yieldhaven.git
 cd yieldhaven
-
-# Install dependencies
 npm install
-
-# Run Clarinet tests
 clarinet test
-
-# Deploy contracts to localnet or testnet
-clarinet integrate
+npm run dev
