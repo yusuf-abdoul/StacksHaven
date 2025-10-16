@@ -73,6 +73,15 @@ export async function readContract<T = any>(
 
     return cvToJSON(result).value as T;
   } catch (error) {
+    const msg = String(error);
+    // Suppress noisy missing-function errors to avoid console spam on periodic polling
+    if (
+      msg.includes('UndefinedFunction') ||
+      msg.includes('NoSuchContractFunction') ||
+      msg.includes('Unchecked(UndefinedFunction')
+    ) {
+      return null;
+    }
     console.error(`Error reading contract ${contractId}.${functionName}:`, error);
     return null;
   }

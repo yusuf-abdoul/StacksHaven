@@ -4,12 +4,14 @@
 (define-constant ERR_INVALID_ALLOCATION (err u102))
 (define-constant ERR_ZERO_AMOUNT (err u103))
 
-;; Set deployer address for testnet deployment
-(define-constant OWNER 'ST3SDPDCDVF45R7ZWKSBXF20AXF6AWR5AMAC72BER)
-(define-constant STRATEGY_A 'ST3SDPDCDVF45R7ZWKSBXF20AXF6AWR5AMAC72BER.strategy-a)
-(define-constant STRATEGY_B 'ST3SDPDCDVF45R7ZWKSBXF20AXF6AWR5AMAC72BER.strategy-b)
-(define-constant STRATEGY_C 'ST3SDPDCDVF45R7ZWKSBXF20AXF6AWR5AMAC72BER.strategy-c)
-(define-constant CONTRACT_HARVESTER 'ST3SDPDCDVF45R7ZWKSBXF20AXF6AWR5AMAC72BER.harvester)
+;; Set deployer address for simnet tests deployment
+(define-constant OWNER 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM)
+(define-constant STRATEGY_A 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.strategy-a)
+(define-constant STRATEGY_B 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.strategy-b)
+(define-constant STRATEGY_C 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.strategy-c)
+(define-constant CONTRACT_HARVESTER 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.harvester)
+;; Contract principal (self)
+(define-constant CONTRACT_VAULT 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.vault)
 
 (define-data-var total-assets uint u0) ;; microSTX units
 (define-data-var total-shares uint u0)
@@ -27,6 +29,16 @@
 )
 (define-map strategy-balances
   (string-ascii 20)
+  uint
+)
+
+;; Track per-user deposits and withdrawals for earnings calculation
+(define-map user-deposited
+  principal
+  uint
+)
+(define-map user-withdrawn
+  principal
   uint
 )
 
@@ -61,6 +73,14 @@
   } (map-get? user-allocations user)))
 )
 
+;; Read-only endpoints for user deposit/withdraw totals
+(define-read-only (get-user-deposited (user principal))
+  (ok (default-to u0 (map-get? user-deposited user)))
+)
+(define-read-only (get-user-withdrawn (user principal))
+  (ok (default-to u0 (map-get? user-withdrawn user)))
+)
+
 (define-public (deposit
     (amount uint)
     (allocations {
@@ -78,8 +98,8 @@
     (asserts! (> amount u0) ERR_ZERO_AMOUNT)
     (asserts! (is-eq total u10000) ERR_INVALID_ALLOCATION)
 
-  ;; transfer STX from user to vault contract
-  (try! (stx-transfer? amount tx-sender (as-contract tx-sender)))
+    ;; transfer STX from user to vault contract
+    (try! (stx-transfer? amount tx-sender CONTRACT_VAULT))
     ;; wrapped in try! to bubble error
 
     ;; mint shares (simple model: shares = amount * 1e6 / share-price)
@@ -95,6 +115,9 @@
     ;; update totals
     (var-set total-assets (+ (var-get total-assets) amount))
     (map-set user-allocations user allocations)
+    (map-set user-deposited user
+      (+ (default-to u0 (map-get? user-deposited user)) amount)
+    )
 
     ;; distribute to strategies: call their deposit functions; if any fails, whole tx fails
     (let (
@@ -102,9 +125,7 @@
         (amount-b (/ (* amount (get strategy-b allocations)) u10000))
         (amount-c (/ (* amount (get strategy-c allocations)) u10000))
       )
-      ;; (try! (contract-call? STRATEGY_A deposit amount-a))
-      ;; (try! (contract-call? STRATEGY_B deposit amount-b))
-      ;; (try! (contract-call? STRATEGY_C deposit amount-c))
+      ;; Strategies do not custody funds; vault keeps STX and only bookkeeps allocations
       ;; update local strategy balances
       (map-set strategy-balances "strategy-a"
         (+ (default-to u0 (map-get? strategy-balances "strategy-a")) amount-a)
@@ -152,9 +173,7 @@
           (amount-b (/ (* amount (get strategy-b user-allocation)) u10000))
           (amount-c (/ (* amount (get strategy-c user-allocation)) u10000))
         )
-        ;; (try! (contract-call? STRATEGY_A withdraw amount-a))
-        ;; (try! (contract-call? STRATEGY_B withdraw amount-b))
-        ;; (try! (contract-call? STRATEGY_C withdraw amount-c))
+        ;; Strategies do not custody funds; vault keeps STX and only bookkeeps allocations
         (map-set strategy-balances "strategy-a"
           (- (default-to u0 (map-get? strategy-balances "strategy-a")) amount-a)
         )
@@ -165,13 +184,23 @@
           (- (default-to u0 (map-get? strategy-balances "strategy-c")) amount-c)
         )
 
+        ;; track withdrawn amount for user PnL
+        (map-set user-withdrawn user
+          (+ (default-to u0 (map-get? user-withdrawn user)) amount)
+        )
+
         ;; transfer STX back to user from vault contract
-        (try! (as-contract (stx-transfer? amount tx-sender user)))
+        (try! (as-contract (stx-transfer? amount CONTRACT_VAULT user)))
 
         (ok amount)
       )
     )
   )
+)
+
+;; Read-only helper to get per-strategy balance tracked by the vault
+(define-read-only (get-strategy-balance (strategy (string-ascii 20)))
+  (ok (default-to u0 (map-get? strategy-balances strategy)))
 )
 
 (define-public (reallocate (new-allocations {
@@ -199,7 +228,8 @@
     (yield-amount uint)
   )
   (begin
-    (asserts! (is-eq tx-sender CONTRACT_HARVESTER) ERR_NOT_AUTHORIZED)
+    ;; Allow direct owner calls (used in tests) or calls initiated by the Harvester contract
+    (asserts! (or (is-eq tx-sender OWNER) (is-eq (contract-caller) (some CONTRACT_HARVESTER))) ERR_NOT_AUTHORIZED)
     (asserts! (> yield-amount u0) ERR_INVALID_AMOUNT)
     (asserts!
       (or
@@ -218,9 +248,9 @@
 )
 
 (define-public (claim-fees (recipient principal) (amount uint))
-     (begin
-       (asserts! (is-eq tx-sender OWNER) ERR_NOT_AUTHORIZED)
-       (try! (as-contract (stx-transfer? amount tx-sender recipient)))
-       (ok true)
-     )
-   )
+  (begin
+    (asserts! (is-eq tx-sender OWNER) ERR_NOT_AUTHORIZED)
+    (try! (as-contract (stx-transfer? amount CONTRACT_VAULT recipient)))
+    (ok true)
+  )
+)

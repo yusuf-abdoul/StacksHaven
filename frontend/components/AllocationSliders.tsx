@@ -64,8 +64,6 @@ export default function AllocationSliders() {
     try {
       await reallocateStrategy(allocations);
 
-      await reallocateStrategy(allocations);
-
       toast.success(
         <div className="font-bold">
           Transaction submitted in your wallet!
@@ -75,7 +73,10 @@ export default function AllocationSliders() {
 
     } catch (error) {
       console.error('Reallocation error:', error);
-      toast.error(error instanceof Error ? error.message : 'Reallocation failed', { id: toastId });
+      const message = error instanceof Error && /cancelled/i.test(error.message)
+        ? 'Transaction cancelled'
+        : (error instanceof Error ? error.message : 'Reallocation failed');
+      toast.error(message, { id: toastId });
     } finally {
       setLoading(false);
     }

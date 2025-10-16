@@ -1,17 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowDownRight } from 'lucide-react';
 import { depositToVault } from '@/lib/contracts';
 import { parseSTX, formatSTX } from '@/lib/stacks';
-import { useVaultData } from '@/hooks/useVault';
+import { useVaultData, useUserData } from '@/hooks/useVault';
 import { useWallet } from '@/hooks/useWallet';
 import toast from 'react-hot-toast';
 import type { StrategyAllocation } from '@/types';
 
 export default function DepositForm() {
-  const { connected } = useWallet();
+  const { connected, stxAddress } = useWallet();
   const { vaultData } = useVaultData();
+  const { userData } = useUserData(stxAddress);
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -20,6 +21,13 @@ export default function DepositForm() {
     strategyB: 3333,
     strategyC: 3334,
   });
+
+  // Initialize allocation from on-chain user allocation when available
+  useEffect(() => {
+    if (userData?.allocations) {
+      setAllocations(userData.allocations);
+    }
+  }, [userData]);
 
   const totalAllocation = allocations.strategyA + allocations.strategyB + allocations.strategyC;
 
@@ -39,7 +47,6 @@ export default function DepositForm() {
 
     try {
       const microSTX = parseSTX(amount);
-      // const result = await depositToVault(microSTX, allocations);
       await depositToVault(microSTX, allocations);
 
       toast.success('Deposit submitted! Confirm the transaction in your wallet.', {
@@ -50,7 +57,10 @@ export default function DepositForm() {
       setAmount('');
     } catch (error) {
       console.error('Deposit error:', error);
-      toast.error(error instanceof Error ? error.message : 'Deposit failed', { id: toastId });
+      const message = error instanceof Error && /cancelled/i.test(error.message)
+        ? 'Transaction cancelled'
+        : (error instanceof Error ? error.message : 'Deposit failed');
+      toast.error(message, { id: toastId });
     } finally {
       setLoading(false);
     }

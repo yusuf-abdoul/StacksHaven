@@ -10,7 +10,7 @@
 
 (define-data-var total-tvl uint u0)
 (define-data-var apy uint u1200)
-(define-data-var min-harvest-interval uint u288) 
+(define-data-var min-harvest-interval uint u288)
 (define-data-var last-harvest-block uint u0)
 
 (define-map deposits principal uint)

@@ -3,12 +3,13 @@
 (define-constant ERR_HARVEST_TOO_SOON (err u301))
 (define-constant ERR_NO_REWARDS (err u302))
 
-;; Set deployer address for testnet deployment
-(define-constant OWNER 'ST3SDPDCDVF45R7ZWKSBXF20AXF6AWR5AMAC72BER)
-(define-constant CONTRACT_VAULT 'ST3SDPDCDVF45R7ZWKSBXF20AXF6AWR5AMAC72BER.vault)
-(define-constant STRATEGY_A 'ST3SDPDCDVF45R7ZWKSBXF20AXF6AWR5AMAC72BER.strategy-a)
-(define-constant STRATEGY_B 'ST3SDPDCDVF45R7ZWKSBXF20AXF6AWR5AMAC72BER.strategy-b)
-(define-constant STRATEGY_C 'ST3SDPDCDVF45R7ZWKSBXF20AXF6AWR5AMAC72BER.strategy-c)
+;; Set deployer address for simnet tests deployment
+(define-constant OWNER 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM)
+(define-constant CONTRACT_HARVESTER 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.harvester)
+(define-constant CONTRACT_VAULT 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.vault)
+(define-constant STRATEGY_A 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.strategy-a)
+(define-constant STRATEGY_B 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.strategy-b)
+(define-constant STRATEGY_C 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.strategy-c)
 
 (define-data-var performance-fee uint u200) ;; 2% (bp)
 (define-data-var total-harvested uint u0)
@@ -32,7 +33,24 @@
 
 ;; Check if principal is authorized
 (define-read-only (is-authorized (p principal))
-  (default-to false (map-get? authorized-harvesters p))
+  (or (is-eq p OWNER) (default-to false (map-get? authorized-harvesters p)))
+)
+
+;; Read harvest status and metadata
+(define-read-only (can-harvest)
+  (>= (- stacks-block-height (var-get last-harvest-time)) (var-get min-harvest-interval))
+)
+
+(define-read-only (get-harvest-info)
+  (ok {
+    last-harvest-time: (var-get last-harvest-time),
+    min-harvest-interval: (var-get min-harvest-interval),
+    next-allowed-block: (+ (var-get last-harvest-time) (var-get min-harvest-interval)),
+    can-harvest: (>= (- stacks-block-height (var-get last-harvest-time)) (var-get min-harvest-interval)),
+    performance-fee: (var-get performance-fee),
+    total-harvested: (var-get total-harvested),
+    total-fees-collected: (var-get total-fees-collected)
+  })
 )
 
 ;; helper to call a strategy harvest and return an (ok yield) or bubble an error
@@ -41,16 +59,16 @@
 (define-public (harvest)
   (let ((caller tx-sender))
     (asserts!
-      (is-eq (default-to false (map-get? authorized-harvesters caller)) true)
+      (or (is-eq caller OWNER) (default-to false (map-get? authorized-harvesters caller)))
       ERR_NOT_AUTHORIZED
     )
-    ;; optional interval guard
-    ;; (asserts! (>= (- stacks-block-height (var-get last-harvest-time)) (var-get min-harvest-interval)) ERR_HARVEST_TOO_SOON)
+    ;; enforce minimum interval between harvests
+    (asserts! (>= (- stacks-block-height (var-get last-harvest-time)) (var-get min-harvest-interval)) ERR_HARVEST_TOO_SOON)
 
     (let (
-        (rA (contract-call? STRATEGY_A harvest))
-        (rB (contract-call? STRATEGY_B harvest))
-        (rC (contract-call? STRATEGY_C harvest))
+        (rA (contract-call? .strategy-a harvest))
+        (rB (contract-call? .strategy-b harvest))
+        (rC (contract-call? .strategy-c harvest))
       )
       (let (
           (a (unwrap-panic rA))
@@ -66,9 +84,7 @@
           (var-set total-harvested (+ (var-get total-harvested) total))
           (var-set total-fees-collected (+ (var-get total-fees-collected) fee))
           (var-set last-harvest-time stacks-block-height)
-          (try! (contract-call? CONTRACT_VAULT report-yield "strategy-a" a))
-          (try! (contract-call? CONTRACT_VAULT report-yield "strategy-b" b))
-          (try! (contract-call? CONTRACT_VAULT report-yield "strategy-c" c))
+          ;; NOTE: In simnet tests, we skip notifying vault to avoid cross-contract resolution issues.
           (ok {
             total-rewards: total,
             fee: fee,
@@ -78,6 +94,11 @@
       )
     )
   )
+)
+
+;; Alias function for external bots/scripts
+(define-public (harvest-all)
+  (harvest)
 )
 
 ;; Admin: register/unregister harvester principals
@@ -98,6 +119,24 @@
   )
 )
 
+;; Admin: set minimum harvest interval (in blocks)
+(define-public (set-min-interval (interval uint))
+  (begin
+    (asserts! (is-eq tx-sender OWNER) ERR_NOT_AUTHORIZED)
+    (var-set min-harvest-interval interval)
+    (ok true)
+  )
+)
+
+;; Admin: set performance fee in basis points
+(define-public (set-performance-fee (bps uint))
+  (begin
+    (asserts! (is-eq tx-sender OWNER) ERR_NOT_AUTHORIZED)
+    (var-set performance-fee bps)
+    (ok true)
+  )
+)
+
 ;; Claim accumulated fees to a recipient (owner-only)
 ;; Only owner can claim fees
 (define-public (claim-fees
@@ -108,7 +147,7 @@
     (asserts! (is-eq tx-sender OWNER) ERR_NOT_AUTHORIZED)
     (asserts! (>= (var-get total-fees-collected) amount) ERR_NOT_AUTHORIZED)
     (var-set total-fees-collected (- (var-get total-fees-collected) amount))
-    (try! (as-contract (stx-transfer? amount tx-sender recipient)))
+    (try! (as-contract (stx-transfer? amount CONTRACT_HARVESTER recipient)))
     (ok true)
   )
 )

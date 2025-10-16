@@ -4,18 +4,49 @@ import { DollarSign, Wallet, TrendingUp, Zap, ArrowUpRight } from 'lucide-react'
 import { useVaultData, useUserData } from '@/hooks/useVault';
 import { useWallet } from '@/hooks/useWallet';
 import { formatSTX } from '@/lib/stacks';
+import { useEffect, useState } from 'react';
+import { getStrategyBalance } from '@/lib/contracts';
 
 export default function Dashboard() {
   const { stxAddress } = useWallet();
   const { vaultData, loading: vaultLoading } = useVaultData();
   const { userData, loading: userLoading } = useUserData(stxAddress);
 
+  const [strategyTVL, setStrategyTVL] = useState({ A: 0, B: 0, C: 0 });
+
+  useEffect(() => {
+    // Refresh per-strategy TVL from vault when vault data changes
+    const fetchTVL = async () => {
+      try {
+        const [a, b, c] = await Promise.all([
+          getStrategyBalance('', 'strategy-a'),
+          getStrategyBalance('', 'strategy-b'),
+          getStrategyBalance('', 'strategy-c'),
+        ]);
+        // Fallback: if vault doesn't track strategy balances, derive from user's balance & allocations
+        if ((a + b + c) === 0 && userData?.balance) {
+          const alloc = userData.allocations;
+          const balMicro = Math.floor(userData.balance * 1_000_000);
+          const fa = Math.floor((balMicro * (alloc?.strategyA || 0)) / 10000);
+          const fb = Math.floor((balMicro * (alloc?.strategyB || 0)) / 10000);
+          const fc = Math.floor((balMicro * (alloc?.strategyC || 0)) / 10000);
+          setStrategyTVL({ A: fa, B: fb, C: fc });
+        } else {
+          setStrategyTVL({ A: a, B: b, C: c });
+        }
+      } catch (e) {
+        // ignore errors; keep defaults
+      }
+    };
+    fetchTVL();
+  }, [vaultData?.tvl, userData?.balance, userData?.allocations]);
+
   const strategies = [
     {
       id: 'A',
       name: 'sBTC Staking',
       apy: 8.0,
-      tvl: vaultData?.tvl ? vaultData.tvl * 0.36 : 450000,
+      tvl: strategyTVL.A,
       risk: 'Low',
       icon: '₿',
     },
@@ -23,7 +54,7 @@ export default function Dashboard() {
       id: 'B',
       name: 'STX Lending',
       apy: 6.5,
-      tvl: vaultData?.tvl ? vaultData.tvl * 0.32 : 400000,
+      tvl: strategyTVL.B,
       risk: 'Low',
       icon: 'Ӿ',
     },
@@ -31,7 +62,7 @@ export default function Dashboard() {
       id: 'C',
       name: 'Liquidity Pool',
       apy: 12.0,
-      tvl: vaultData?.tvl ? vaultData.tvl * 0.32 : 400000,
+      tvl: strategyTVL.C,
       risk: 'Medium',
       icon: '💧',
     },
@@ -81,7 +112,7 @@ export default function Dashboard() {
             <Wallet className="w-5 h-5 text-blue-400" />
           </div>
           <div className="text-3xl font-bold">
-            {userData ? `${(userData.balance)} STX` : '0 STX'}
+            {userData ? `${userData.balance.toFixed(6)} STX` : '0 STX'}
           </div>
           <div className="text-xs text-purple-300 mt-1">
             {userData ? `${(userData.shares).toFixed(2)} vault shares` : '0 shares'}
@@ -94,7 +125,7 @@ export default function Dashboard() {
             <TrendingUp className="w-5 h-5 text-purple-400" />
           </div>
           <div className="text-3xl font-bold text-green-400">
-            +{userData ? (userData.earnings) : '0'} STX
+            +{userData ? userData.earnings.toFixed(6) : '0'} STX
           </div>
           <div className="text-xs text-purple-300 mt-1">
             {userData && userData.deposited > 0
@@ -155,7 +186,7 @@ export default function Dashboard() {
                 <div className="flex justify-between">
                   <span className="text-purple-300">Your Amount:</span>
                   <span className="font-semibold">
-                    {userData ? formatSTX((userData.balance * allocation) / 10000) : '0'} STX
+                    {userData ? ((userData.balance * allocation) / 10000).toFixed(6) : '0'} STX
                   </span>
                 </div>
               </div>

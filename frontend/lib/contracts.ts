@@ -8,10 +8,14 @@ import {
     FungibleConditionCode,
     broadcastTransaction,
     TxBroadcastResult,
+    callReadOnlyFunction,
+    cvToJSON,
+    stringAsciiCV,
 } from '@stacks/transactions';
 import { openContractCall } from '@stacks/connect';
 import { NETWORK, CONTRACTS, parseContractId } from './config';
 import { readContract, getUserAddress, parseSTX } from './stacks';
+import { getLedger, updateLedger } from './ledger';
 import type { StrategyAllocation, VaultData, UserData } from '@/types';
 
 // ============================================
@@ -20,20 +24,24 @@ import type { StrategyAllocation, VaultData, UserData } from '@/types';
 
 export async function getVaultData(): Promise<VaultData | null> {
     try {
-        const [totalShares, totalAssets] = await Promise.all([
-            readContract<number>(CONTRACTS.vault, 'get-total-shares'),
-            readContract<number>(CONTRACTS.vault, 'get-total-assets'),
+        const [totalSharesCV, totalAssetsCV, sharePriceCV] = await Promise.all([
+            readContract<any>(CONTRACTS.vault, 'get-total-shares'),
+            readContract<any>(CONTRACTS.vault, 'get-total-assets'),
+            readContract<any>(CONTRACTS.vault, 'get-share-price'),
         ]);
 
-        if (totalShares === null || totalAssets === null) return null;
+        if (totalSharesCV === null || totalAssetsCV === null || sharePriceCV === null) return null;
 
-        const sharePrice = totalShares > 0 ? totalAssets / totalShares : 1;
+        const totalShares = totalSharesCV?.value ? Number(totalSharesCV.value) : Number(totalSharesCV);
+        const totalAssets = totalAssetsCV?.value ? Number(totalAssetsCV.value) : Number(totalAssetsCV);
+        const sharePriceRaw = sharePriceCV?.value ? Number(sharePriceCV.value) : Number(sharePriceCV);
+        const sharePrice = sharePriceRaw / 1_000_000; // convert to STX per share
 
         return {
             tvl: totalAssets,
             totalShares,
             sharePrice,
-            totalUsers: 0, // Could be tracked separately
+            totalUsers: 0,
         };
     } catch (error) {
         console.error('Error fetching vault data:', error);
@@ -43,49 +51,49 @@ export async function getVaultData(): Promise<VaultData | null> {
 
 export async function getUserVaultData(userAddress: string): Promise<UserData | null> {
     try {
-        // const [shares, allocations] = await Promise.all([
-        //     readContract<number>(CONTRACTS.vault, 'get-user-shares', [
-        //         principalCV(userAddress),
-        //     ]),
-        //     readContract<any>(CONTRACTS.vault, 'get-user-allocation', [
-        //         principalCV(userAddress),
-        //     ]),
-        // ]);
-        const [sharesResult, allocationsResult] = await Promise.all([
-            readContract<any>(CONTRACTS.vault, 'get-user-shares', [
-                principalCV(userAddress),
-            ]),
-            readContract<any>(CONTRACTS.vault, 'get-user-allocation', [
-                principalCV(userAddress),
-            ]),
+        const [sharesCV, allocationsCV, depositedCV, withdrawnCV] = await Promise.all([
+            readContract<any>(CONTRACTS.vault, 'get-user-shares', [principalCV(userAddress)]),
+            readContract<any>(CONTRACTS.vault, 'get-user-allocation', [principalCV(userAddress)]),
+            readContract<any>(CONTRACTS.vault, 'get-user-deposited', [principalCV(userAddress)]),
+            readContract<any>(CONTRACTS.vault, 'get-user-withdrawn', [principalCV(userAddress)]),
         ]);
-        const shares = sharesResult?.value ? Number(sharesResult.value) : 0;
-        if (shares === null) return null;
 
+        if (sharesCV === null) return null;
+
+        const sharesRaw = typeof sharesCV === 'number' ? sharesCV : (sharesCV?.value ? Number(sharesCV.value) : 0);
+        // Share price in STX per share
         const vaultData = await getVaultData();
-        const balance = vaultData ? (shares * vaultData.sharePrice) / 1_000_000 : shares / 1_000_000;
+        const sharePrice = vaultData?.sharePrice ?? 1; // STX per share
+        // Compute balance using on-chain formula: amount = shares * sharePrice_raw / 1e6
+        // Since sharePrice here is STX per share, balance(STX) = (sharesRaw * sharePrice) / 1e6
+        const balance = (sharesRaw * sharePrice) / 1_000_000;
+        // Human-readable shares for UI (1e6 micro-shares per share)
+        const shares = sharesRaw / 1_000_000;
 
-        // Extract allocations from tuple
-        const allocs = allocationsResult?.value?.data || {};
-        const strategyA = allocs['strategy-a']?.value ? Number(allocs['strategy-a'].value) : 0;
-        const strategyB = allocs['strategy-b']?.value ? Number(allocs['strategy-b'].value) : 0;
-        const strategyC = allocs['strategy-c']?.value ? Number(allocs['strategy-c'].value) : 0;
+        // On-chain user totals (microSTX -> STX)
+        let depositedRaw = typeof depositedCV === 'number' ? depositedCV : (depositedCV?.value ? Number(depositedCV.value) : 0);
+        let withdrawnRaw = typeof withdrawnCV === 'number' ? withdrawnCV : (withdrawnCV?.value ? Number(withdrawnCV.value) : 0);
+        // Fallback to local ledger if on-chain endpoints are absent on deployed contract
+        if ((depositedCV === null && withdrawnCV === null) || (depositedRaw === 0 && withdrawnRaw === 0)) {
+            const ledger = getLedger(userAddress);
+            depositedRaw = ledger.deposited;
+            withdrawnRaw = ledger.withdrawn;
+        }
+        const deposited = depositedRaw / 1_000_000;
+        const withdrawn = withdrawnRaw / 1_000_000;
+        const earnings = Math.max(0, balance + withdrawn - deposited);
+
+        // Extract allocations from tuple JSON (readContract returns cvToJSON(result).value)
+        const allocData = allocationsCV?.value || {};
+        const strategyA = allocData['strategy-a']?.value ? Number(allocData['strategy-a'].value) : 0;
+        const strategyB = allocData['strategy-b']?.value ? Number(allocData['strategy-b'].value) : 0;
+        const strategyC = allocData['strategy-c']?.value ? Number(allocData['strategy-c'].value) : 0;
 
         return {
-            //     balance,
-            //     shares,
-            //     deposited: 0, // Track separately or calculate from history
-            //     earnings: 0, // Calculate from share price appreciation
-            //     allocations: allocations || {
-            //         strategyA: 0,
-            //         strategyB: 0,
-            //         strategyC: 0,
-            //     },
-            // };
-            balance: balance,
-            shares: shares / 1_000_000, // Convert to STX
-            deposited: balance, // Approximate for now
-            earnings: balance - (shares / 1_000_000), // Share price appreciation
+            balance,
+            shares,
+            deposited,
+            earnings,
             allocations: {
                 strategyA,
                 strategyB,
@@ -101,7 +109,7 @@ export async function getUserVaultData(userAddress: string): Promise<UserData | 
 export async function depositToVault(
     amount: number,
     allocations: StrategyAllocation
-) {
+): Promise<void> {
     const userAddress = getUserAddress();
     if (!userAddress) throw new Error('Wallet not connected');
 
@@ -116,67 +124,94 @@ export async function depositToVault(
         ),
     ];
 
-    await openContractCall({
-        contractAddress: address,
-        contractName: name,
-        functionName: 'deposit',
-        functionArgs: [
-            uintCV(amount),
-            tupleCV({
-                'strategy-a': uintCV(allocations.strategyA),
-                'strategy-b': uintCV(allocations.strategyB),
-                'strategy-c': uintCV(allocations.strategyC),
-            }),
-        ],
-        postConditions,
-        postConditionMode: PostConditionMode.Deny,
-        network: NETWORK,
-        anchorMode: AnchorMode.Any,
+    await new Promise<void>((resolve, reject) => {
+        openContractCall({
+            contractAddress: address,
+            contractName: name,
+            functionName: 'deposit',
+            functionArgs: [
+                uintCV(amount),
+                tupleCV({
+                    'strategy-a': uintCV(allocations.strategyA),
+                    'strategy-b': uintCV(allocations.strategyB),
+                    'strategy-c': uintCV(allocations.strategyC),
+                }),
+            ],
+            postConditions,
+            postConditionMode: PostConditionMode.Deny,
+            network: NETWORK,
+            anchorMode: AnchorMode.Any,
+            onFinish: () => {
+                // Update local ledger as a fallback for UIs when on-chain endpoints are unavailable
+                updateLedger(userAddress, amount, 0);
+                resolve();
+            },
+            onCancel: () => {
+                reject(new Error('Transaction cancelled'));
+            },
+        });
     });
-
 }
 
-export async function withdrawFromVault(shares: number) {
+export async function withdrawFromVault(shares: number): Promise<void> {
     const userAddress = getUserAddress();
     if (!userAddress) throw new Error('Wallet not connected');
 
     const { address, name } = parseContractId(CONTRACTS.vault);
 
-    await openContractCall({
-        contractAddress: address,
-        contractName: name,
-        functionName: 'withdraw',
-        functionArgs: [uintCV(shares)],
-        postConditionMode: PostConditionMode.Allow,
-        network: NETWORK,
-        anchorMode: AnchorMode.Any,
-    });
+    // Approximate withdraw amount from current share price
+    const vaultData = await getVaultData();
+    const sharePrice = vaultData?.sharePrice ?? 1; // STX per share
 
+    await new Promise<void>((resolve, reject) => {
+        openContractCall({
+            contractAddress: address,
+            contractName: name,
+            functionName: 'withdraw',
+            functionArgs: [uintCV(shares)],
+            postConditionMode: PostConditionMode.Allow,
+            network: NETWORK,
+            anchorMode: AnchorMode.Any,
+            onFinish: () => {
+                // Approximate withdrawn microSTX using current share price for local ledger fallback
+                const withdrawnMicroSTX = Math.floor(shares * sharePrice);
+                updateLedger(userAddress, 0, withdrawnMicroSTX);
+                resolve();
+            },
+            onCancel: () => {
+                reject(new Error('Transaction cancelled'));
+            },
+        });
+    });
 
 }
 
 export async function reallocateStrategy(
     allocations: StrategyAllocation
-) {
+): Promise<void> {
     const userAddress = getUserAddress();
     if (!userAddress) throw new Error('Wallet not connected');
 
     const { address, name } = parseContractId(CONTRACTS.vault);
 
-    await openContractCall({
-        contractAddress: address,
-        contractName: name,
-        functionName: 'reallocate',
-        functionArgs: [
-            tupleCV({
-                'strategy-a': uintCV(allocations.strategyA),
-                'strategy-b': uintCV(allocations.strategyB),
-                'strategy-c': uintCV(allocations.strategyC),
-            }),
-        ],
-        postConditionMode: PostConditionMode.Allow,
-        network: NETWORK,
-        anchorMode: AnchorMode.Any,
+    await new Promise<void>((resolve, reject) => {
+        openContractCall({
+            contractAddress: address,
+            contractName: name,
+            functionName: 'reallocate',
+            functionArgs: [
+                tupleCV({
+                    'strategy-a': uintCV(allocations.strategyA),
+                    'strategy-b': uintCV(allocations.strategyB),
+                    'strategy-c': uintCV(allocations.strategyC),
+                }),
+            ],
+            postConditionMode: PostConditionMode.Allow,
+            network: NETWORK,
+            anchorMode: AnchorMode.Any,
+            onFinish: () => resolve(),
+            onCancel: () => reject(new Error('Transaction cancelled')),
+        });
     });
 
 }
@@ -190,14 +225,21 @@ export async function getStrategyBalance(
     strategyId: string
 ): Promise<number> {
     try {
-        const balance = await readContract<number>(
-            CONTRACTS.vault,
-            'get-strategy-balance',
-            [stringAsciiCV(strategyId)]
-        );
+        const { address, name } = parseContractId(CONTRACTS.vault);
+        const result = await callReadOnlyFunction({
+            contractAddress: address,
+            contractName: name,
+            functionName: 'get-strategy-balance',
+            functionArgs: [stringAsciiCV(strategyId)],
+            network: NETWORK,
+            senderAddress: getUserAddress() || address,
+        });
+        const json = cvToJSON(result);
+        const inner = json?.value;
+        const balance = typeof inner === 'number' ? inner : (inner?.value ? Number(inner.value) : 0);
         return balance || 0;
-    } catch (error) {
-        console.error(`Error fetching strategy ${strategyId} balance:`, error);
+    } catch (_) {
+        // Silently fall back when function is unavailable on deployed contract
         return 0;
     }
 }
@@ -226,5 +268,4 @@ export async function canHarvest(): Promise<boolean> {
     }
 }
 
-// Helper: stringAsciiCV for strategy IDs
-import { stringAsciiCV } from '@stacks/transactions';
+// Helper: stringAsciiCV for strategy IDs (imported above)

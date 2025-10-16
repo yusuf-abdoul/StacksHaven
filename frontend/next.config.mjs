@@ -1,4 +1,5 @@
-export const nextConfig = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   reactStrictMode: true,
   webpack: (config) => {
     config.resolve.fallback = {
@@ -10,3 +11,5 @@ export const nextConfig = {
     return config;
   },
 };
+
+export default nextConfig;

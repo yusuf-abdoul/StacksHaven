@@ -30,8 +30,9 @@ export default function WithdrawForm() {
     const toastId = toast.loading('Preparing transaction...');
 
     try {
-      const sharesToBurn = parseSTX(shares);
-      await withdrawFromVault(sharesToBurn);
+      // shares input is in human shares; convert to micro-shares (1e6)
+      const microSharesToBurn = Math.floor(Number(shares) * 1_000_000);
+      await withdrawFromVault(microSharesToBurn);
 
       toast.success('Withdrawal submitted! Confirm the transaction in your wallet.', {
         id: toastId,
@@ -41,7 +42,10 @@ export default function WithdrawForm() {
       setShares('');
     } catch (error) {
       console.error('Withdraw error:', error);
-      toast.error(error instanceof Error ? error.message : 'Withdrawal failed', { id: toastId });
+      const message = error instanceof Error && /cancelled/i.test(error.message)
+        ? 'Transaction cancelled'
+        : (error instanceof Error ? error.message : 'Withdrawal failed');
+      toast.error(message, { id: toastId });
     } finally {
       setLoading(false);
     }
@@ -49,12 +53,12 @@ export default function WithdrawForm() {
 
   const setMaxShares = () => {
     if (userData) {
-      setShares((userData.shares * 1_000_000).toString());
+      setShares(userData.shares.toFixed(6));
     }
   };
 
   const stxReceived = shares && vaultData
-    ? parseFloat(shares) * vaultData.sharePrice
+    ? Number(shares) * (vaultData.sharePrice || 0)
     : 0;
 
   return (
@@ -89,7 +93,7 @@ export default function WithdrawForm() {
               className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-lg focus:outline-none focus:border-purple-500 transition-all"
             />
             <div className="text-xs text-purple-300 mt-1">
-              Available: {userData ? formatSTX(userData.shares) : '0'} shares
+              Available: {userData ? userData.shares.toFixed(6) : '0'} shares
             </div>
           </div>
 
@@ -100,19 +104,19 @@ export default function WithdrawForm() {
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <div className="text-purple-300">Total Shares:</div>
-                  <div className="font-bold">{formatSTX(userData.shares)}</div>
+                  <div className="font-bold">{userData.shares.toFixed(6)}</div>
                 </div>
                 <div>
                   <div className="text-purple-300">Est. Value:</div>
-                  <div className="font-bold">{formatSTX(userData.balance)} STX</div>
+                  <div className="font-bold">{userData.balance.toFixed(6)} STX</div>
                 </div>
                 <div>
                   <div className="text-purple-300">Deposited:</div>
-                  <div className="font-bold">{formatSTX(userData.deposited)} STX</div>
+                  <div className="font-bold">{userData.deposited.toFixed(6)} STX</div>
                 </div>
                 <div>
                   <div className="text-purple-300">Earnings:</div>
-                  <div className="font-bold text-green-400">+{formatSTX(userData.earnings)} STX</div>
+                  <div className="font-bold text-green-400">+{userData.earnings.toFixed(6)} STX</div>
                 </div>
               </div>
             </div>
@@ -121,7 +125,7 @@ export default function WithdrawForm() {
           {/* Preview */}
           <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4">
             <div className="text-sm text-purple-300 mb-2">You will receive:</div>
-            <div className="text-2xl font-bold">{formatSTX(parseSTX(stxReceived.toString()))} STX</div>
+            <div className="text-2xl font-bold">{stxReceived.toFixed(6)} STX</div>
             <div className="text-xs text-purple-300 mt-1">
               Plus any accrued rewards from strategies
             </div>
